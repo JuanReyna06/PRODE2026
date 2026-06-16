@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'fs'
+import ws from 'ws';
 
 try {
   const env = readFileSync('.env', 'utf-8')
@@ -19,7 +20,24 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE) {
   process.exit(1)
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE)
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY,
+  {
+    global: {
+      headers: {
+        // ... si tenías headers extra dejaselos, si no, no importa
+      }
+    },
+    auth: {
+      persistSession: false
+    },
+    // ¡ACÁ ESTÁ LA MAGIA QUE SOLUCIONA EL ERROR!
+    realtime: {
+      transport: ws
+    }
+  }
+);
 
 // ── Mapeo nombre openfootball -> código de tu prode ──────────────────────────
 const TEAM_MAP = {
