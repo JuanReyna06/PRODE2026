@@ -4,9 +4,19 @@ import { useProdeData } from '@/hooks/useProdeData'
 import { Leaderboard } from '@/components/Leaderboard'
 import { MatchesList } from '@/components/MatchesList'
 import { formatLastUpdate } from '@/lib/utils'
-
+import { useState } from 'react'
 export default function App() {
   const { leaderboard, matches, loading, lastUpdate, hasLive, refetch } = useProdeData()
+  const [syncing, setSyncing] = useState(false)
+
+  async function handleRefresh() {
+    setSyncing(true)
+  try {
+    await fetch('/api/sync', { method: 'POST' })
+  } catch {}
+  await refetch()
+  setSyncing(false)
+  } 
 
   if (loading) {
     return (
@@ -46,13 +56,14 @@ export default function App() {
                 En Vivo
               </div>
             )}
-            <button
-              onClick={refetch}
-              className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-              title="Actualizar"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
+              <button
+                onClick={handleRefresh}
+                disabled={syncing}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
+                title={syncing ? 'Sincronizando...' : 'Actualizar resultados'}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+              </button>
           </div>
         </div>
       </header>
