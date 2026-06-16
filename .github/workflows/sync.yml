@@ -1,0 +1,26 @@
+name: Sync World Cup Results
+
+on:
+  schedule:
+    # Cada hora entre las 12:00 y 00:00 UTC (partidos suelen ser de tarde/noche ARG)
+    - cron: '0 15,16,17,18,19,20,21,22,23,0,1,2,3 * * *'
+  workflow_dispatch:   # También permite correrlo manualmente desde GitHub
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install @supabase/supabase-js
+
+      - name: Run sync
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node sync-results.mjs
