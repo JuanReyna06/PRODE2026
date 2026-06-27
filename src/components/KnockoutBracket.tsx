@@ -310,7 +310,7 @@ export function KnockoutBracket({ matches }: { matches: KnockoutMatch[] }) {
         </div>
         <div className="mt-4">
           <span>TOY LABURANDO</span>
-          <img src="src\public\leo.jpg" alt="Messi durmiendo con la copa" className="w-full rounded-lg shadow-md" />
+          
         </div>
 
         {byRound.R16.length > 0 && (
