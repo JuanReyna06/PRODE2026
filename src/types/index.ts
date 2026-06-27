@@ -2,6 +2,8 @@ export interface LeaderboardEntry {
   participant_id: number;
   name: string;
   total_points: number;
+  pts_grupos: number;
+  pts_eliminatorias: number;
   exactos: number;
   ganador_correcto: number;
   fallados: number;
@@ -18,6 +20,31 @@ export interface Match {
   result_home: number | null;
   result_away: number | null;
   status: 'scheduled' | 'live' | 'finished';
+}
+
+export interface KnockoutMatch {
+  id: number;
+  round: 'R16' | 'QF' | 'SF' | 'F';
+  match_order: number;
+  home_code: string | null;
+  away_code: string | null;
+  home_label: string | null;   // ej: 'España', '2J'
+  away_label: string | null;
+  result_home: number | null;
+  result_away: number | null;
+  penalty_winner: string | null;
+  status: 'scheduled' | 'live' | 'finished';
+}
+
+export interface KnockoutPrediction {
+  match_id: number;
+  pred_home: number | null;
+  pred_away: number | null;
+  pred_winner: string | null;   // código del equipo
+  pred_qualifier: string | null;
+  pts_goles: number | null;
+  pts_ganador: number | null;
+  pts_clasificado: number | null;
 }
 
 export interface Prediction {

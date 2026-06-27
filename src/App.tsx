@@ -1,22 +1,24 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Trophy, CalendarDays, RefreshCw } from 'lucide-react'
+import { Trophy, CalendarDays, RefreshCw, Swords } from 'lucide-react'
 import { useProdeData } from '@/hooks/useProdeData'
 import { Leaderboard } from '@/components/Leaderboard'
 import { MatchesList } from '@/components/MatchesList'
+import { KnockoutBracket } from '@/components/KnockoutBracket'
 import { formatLastUpdate } from '@/lib/utils'
 import { useState } from 'react'
+
 export default function App() {
-  const { leaderboard, matches, loading, lastUpdate, hasLive, refetch } = useProdeData()
+  const { leaderboard, matches, knockoutMatches, loading, lastUpdate, hasLive, refetch } = useProdeData()
   const [syncing, setSyncing] = useState(false)
 
   async function handleRefresh() {
     setSyncing(true)
-  try {
-    await fetch('/api/sync', { method: 'POST' })
-  } catch {}
-  await refetch()
-  setSyncing(false)
-  } 
+    try {
+      await fetch('/api/sync', { method: 'POST' })
+    } catch {}
+    await refetch()
+    setSyncing(false)
+  }
 
   if (loading) {
     return (
@@ -34,7 +36,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      {/* Header */}
       <header className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white sticky top-0 z-10 shadow-lg">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -56,28 +57,32 @@ export default function App() {
                 En Vivo
               </div>
             )}
-              <button
-                onClick={handleRefresh}
-                disabled={syncing}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
-                title={syncing ? 'Sincronizando...' : 'Actualizar resultados'}
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-              </button>
+            <button
+              onClick={handleRefresh}
+              disabled={syncing}
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
+              title={syncing ? 'Sincronizando...' : 'Actualizar resultados'}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+            </button>
           </div>
         </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-4">
         <Tabs defaultValue="posiciones">
-          <TabsList className="w-full grid grid-cols-2 mb-4">
-            <TabsTrigger value="posiciones" className="font-semibold text-sm">
-              <Trophy className="w-4 h-4 mr-1.5" />
+          <TabsList className="w-full grid grid-cols-3 mb-4">
+            <TabsTrigger value="posiciones" className="font-semibold text-xs sm:text-sm">
+              <Trophy className="w-3.5 h-3.5 mr-1" />
               Posiciones
             </TabsTrigger>
-            <TabsTrigger value="partidos" className="font-semibold text-sm">
-              <CalendarDays className="w-4 h-4 mr-1.5" />
-              Partidos
+            <TabsTrigger value="grupos" className="font-semibold text-xs sm:text-sm">
+              <CalendarDays className="w-3.5 h-3.5 mr-1" />
+              Grupos
+            </TabsTrigger>
+            <TabsTrigger value="eliminatorias" className="font-semibold text-xs sm:text-sm">
+              <Swords className="w-3.5 h-3.5 mr-1" />
+              Elim.
             </TabsTrigger>
           </TabsList>
 
@@ -85,8 +90,12 @@ export default function App() {
             <Leaderboard entries={leaderboard} matches={matches} />
           </TabsContent>
 
-          <TabsContent value="partidos">
+          <TabsContent value="grupos">
             <MatchesList matches={matches} />
+          </TabsContent>
+
+          <TabsContent value="eliminatorias">
+            <KnockoutBracket matches={knockoutMatches} />
           </TabsContent>
         </Tabs>
       </main>
