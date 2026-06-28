@@ -6,6 +6,7 @@ import { MatchesList } from '@/components/MatchesList'
 import { KnockoutBracket } from '@/components/KnockoutBracket'
 import { formatLastUpdate } from '@/lib/utils'
 import { useState } from 'react'
+import { WinnerCelebration } from '@/components/WinnerCelebration'
 
 export default function App() {
   const { leaderboard, matches, knockoutMatches, loading, lastUpdate, hasLive, refetch } = useProdeData()
@@ -36,6 +37,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
+      <WinnerCelebration />
       <header className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white sticky top-0 z-10 shadow-lg">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
