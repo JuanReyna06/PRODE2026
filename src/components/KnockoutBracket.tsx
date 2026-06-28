@@ -308,15 +308,6 @@ export function KnockoutBracket({ matches }: { matches: KnockoutMatch[] }) {
           <span className="text-xs text-slate-500">Fase eliminatoria</span>
           <span className="text-xs font-bold text-slate-700">{playedCount} partidos jugados</span>
         </div>
-        <div className="mt-4 rounded-xl overflow-hidden">
-           <span>TOY LABURANDO</span>
-         <img
-            src="/messi2.jpg"
-            alt="Messi durmiendo con la copa"
-            className="w-full object-cover rounded-xl"
-          />
-        </div>
-
         {byRound.R16.length > 0 && (
           <RoundSection title="16avos de final" matches={byRound.R16} onSelect={setSelected} />
         )}
