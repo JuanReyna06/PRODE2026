@@ -2,14 +2,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Trophy, CalendarDays, RefreshCw, Swords } from 'lucide-react'
 import { useProdeData } from '@/hooks/useProdeData'
 import { Leaderboard } from '@/components/Leaderboard'
+import { KnockoutLeaderboard } from '@/components/KnockoutLeaderboard'
 import { MatchesList } from '@/components/MatchesList'
 import { KnockoutBracket } from '@/components/KnockoutBracket'
+import { WinnerCelebration } from '@/components/WinnerCelebration'
 import { formatLastUpdate } from '@/lib/utils'
 import { useState } from 'react'
-import { WinnerCelebration } from '@/components/WinnerCelebration'
 
 export default function App() {
-  const { leaderboard, matches, knockoutMatches, loading, lastUpdate, hasLive, refetch } = useProdeData()
+  const { leaderboard, knockoutLeaderboard, matches, knockoutMatches, loading, lastUpdate, hasLive, refetch } = useProdeData()
   const [syncing, setSyncing] = useState(false)
 
   async function handleRefresh() {
@@ -37,7 +38,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <WinnerCelebration />
+      
+
       <header className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white sticky top-0 z-10 shadow-lg">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -51,7 +53,6 @@ export default function App() {
               </p>
             </div>
           </div>
-
           <div className="flex items-center gap-2">
             {hasLive && (
               <div className="flex items-center gap-1.5 bg-red-600 text-white text-xs font-bold px-2.5 py-1 rounded-full animate-pulse">
@@ -72,32 +73,40 @@ export default function App() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-4">
-        <Tabs defaultValue="posiciones">
-          <TabsList className="w-full grid grid-cols-3 mb-4">
-            <TabsTrigger value="posiciones" className="font-semibold text-xs sm:text-sm">
-              <Trophy className="w-3.5 h-3.5 mr-1" />
-              Posiciones
+        <Tabs defaultValue="elim-posiciones">
+          <TabsList className="w-full grid grid-cols-4 mb-4">
+            <TabsTrigger value="elim-posiciones" className="font-semibold text-[11px] sm:text-sm">
+              <Swords className="w-3 h-3 mr-1" />
+              Elim.
             </TabsTrigger>
-            <TabsTrigger value="grupos" className="font-semibold text-xs sm:text-sm">
-              <CalendarDays className="w-3.5 h-3.5 mr-1" />
+            <TabsTrigger value="elim-partidos" className="font-semibold text-[11px] sm:text-sm">
+              <CalendarDays className="w-3 h-3 mr-1" />
+              Llaves
+            </TabsTrigger>
+            <TabsTrigger value="grupos-posiciones" className="font-semibold text-[11px] sm:text-sm">
+              <Trophy className="w-3 h-3 mr-1" />
               Grupos
             </TabsTrigger>
-            <TabsTrigger value="eliminatorias" className="font-semibold text-xs sm:text-sm">
-              <Swords className="w-3.5 h-3.5 mr-1" />
-              Elim.
+            <TabsTrigger value="grupos-partidos" className="font-semibold text-[11px] sm:text-sm">
+              <CalendarDays className="w-3 h-3 mr-1" />
+              Fixture
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="posiciones">
+          <TabsContent value="elim-posiciones">
+            <KnockoutLeaderboard entries={knockoutLeaderboard} matches={knockoutMatches} />
+          </TabsContent>
+
+          <TabsContent value="elim-partidos">
+            <KnockoutBracket matches={knockoutMatches} />
+          </TabsContent>
+
+          <TabsContent value="grupos-posiciones">
             <Leaderboard entries={leaderboard} matches={matches} />
           </TabsContent>
 
-          <TabsContent value="grupos">
+          <TabsContent value="grupos-partidos">
             <MatchesList matches={matches} />
-          </TabsContent>
-
-          <TabsContent value="eliminatorias">
-            <KnockoutBracket matches={knockoutMatches} />
           </TabsContent>
         </Tabs>
       </main>

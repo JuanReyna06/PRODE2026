@@ -1,6 +1,7 @@
+// sync-results.mjs
+// Uso: node sync-results.mjs
 import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'fs'
-import ws from 'ws';
 
 try {
   const env = readFileSync('.env', 'utf-8')
@@ -10,185 +11,134 @@ try {
   }
 } catch {}
 
-// ── Config ────────────────────────────────────────────────────────────────────
-const SUPABASE_URL     = process.env.VITE_SUPABASE_URL     || process.env.SUPABASE_URL
-const SUPABASE_SERVICE = process.env.SUPABASE_SERVICE_KEY              // service_role key (tiene permisos de escritura)
+const SUPABASE_URL     = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+const SUPABASE_SERVICE = process.env.SUPABASE_SERVICE_KEY
 const DATA_URL         = 'https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json'
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE) {
-  console.error('❌ Faltan variables de entorno SUPABASE_URL y SUPABASE_SERVICE_KEY')
+  console.error('❌ Faltan SUPABASE_URL y SUPABASE_SERVICE_KEY')
   process.exit(1)
 }
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY,
-  {
-    global: {
-      headers: {
-        // ... si tenías headers extra dejaselos, si no, no importa
-      }
-    },
-    auth: {
-      persistSession: false
-    },
-    // ¡ACÁ ESTÁ LA MAGIA QUE SOLUCIONA EL ERROR!
-    realtime: {
-      transport: ws
-    }
-  }
-);
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE, {
+  auth: { persistSession: false }
+})
 
-// ── Mapeo nombre openfootball -> código de tu prode ──────────────────────────
 const TEAM_MAP = {
-  'Mexico':                'MEX',
-  'South Africa':          'SUD',
-  'South Korea':           'COR',
-  'Czech Republic':        'CZE',
-  'Canada':                'CAN',
-  'Bosnia & Herzegovina':  'BIH',
-  'Qatar':                 'QAT',
-  'Switzerland':           'SUI',
-  'Brazil':                'BRA',
-  'Morocco':               'MAR',
-  'Haiti':                 'HAI',
-  'Scotland':              'SCO',
-  'USA':                   'USA',
-  'Paraguay':              'PAR',
-  'Australia':             'AUS',
-  'Turkey':                'TUR',
-  'Germany':               'ALE',
-  'Curaçao':               'CUR',
-  'Ivory Coast':           'CMA',
-  'Ecuador':               'ECU',
-  'Netherlands':           'PBA',
-  'Japan':                 'JAP',
-  'Sweden':                'SUE',
-  'Tunisia':               'TUN',
-  'Belgium':               'BEL',
-  'Egypt':                 'EGI',
-  'Iran':                  'IRA',
-  'New Zealand':           'NZE',
-  'Spain':                 'ESP',
-  'Cape Verde':            'CVE',
-  'Saudi Arabia':          'SAU',
-  'Uruguay':               'URU',
-  'France':                'FRA',
-  'Iraq':                  'IRK',
-  'Senegal':               'SEN',
-  'Norway':                'NOR',
-  'Argentina':             'ARG',
-  'Algeria':               'AGL',
-  'Austria':               'AUT',
-  'Jordan':                'JOR',
-  'Portugal':              'POR',
-  'DR Congo':              'CGO',
-  'Uzbekistan':            'UZB',
-  'Colombia':              'COL',
-  'England':               'ING',
-  'Croatia':               'CRO',
-  'Ghana':                 'GHA',
-  'Panama':                'PAN',
+  'Mexico': 'MEX', 'South Africa': 'SUD', 'South Korea': 'COR',
+  'Czech Republic': 'CZE', 'Canada': 'CAN', 'Bosnia & Herzegovina': 'BIH',
+  'Qatar': 'QAT', 'Switzerland': 'SUI', 'Brazil': 'BRA', 'Morocco': 'MAR',
+  'Haiti': 'HAI', 'Scotland': 'SCO', 'USA': 'USA', 'Paraguay': 'PAR',
+  'Australia': 'AUS', 'Turkey': 'TUR', 'Germany': 'ALE', 'Curaçao': 'CUR',
+  'Ivory Coast': 'CMA', 'Ecuador': 'ECU', 'Netherlands': 'PBA', 'Japan': 'JAP',
+  'Sweden': 'SUE', 'Tunisia': 'TUN', 'Belgium': 'BEL', 'Egypt': 'EGI',
+  'Iran': 'IRA', 'New Zealand': 'NZE', 'Spain': 'ESP', 'Cape Verde': 'CVE',
+  'Saudi Arabia': 'SAU', 'Uruguay': 'URU', 'France': 'FRA', 'Iraq': 'IRK',
+  'Senegal': 'SEN', 'Norway': 'NOR', 'Argentina': 'ARG', 'Algeria': 'AGL',
+  'Austria': 'AUT', 'Jordan': 'JOR', 'Portugal': 'POR', 'DR Congo': 'CGO',
+  'Uzbekistan': 'UZB', 'Colombia': 'COL', 'England': 'ING', 'Croatia': 'CRO',
+  'Ghana': 'GHA', 'Panama': 'PAN',
 }
 
-// ── Fetch datos de openfootball ───────────────────────────────────────────────
-async function fetchRemoteMatches() {
-  const res = await fetch(DATA_URL)
-  if (!res.ok) throw new Error(`openfootball fetch falló: ${res.status}`)
-  const data = await res.json()
-  // Solo fase de grupos (tienen campo group, no son knockout)
-  return data.matches.filter(m => m.group && TEAM_MAP[m.team1] && TEAM_MAP[m.team2])
+function parseScore(match) {
+  const score = match.score
+  if (!score) return null
+  const [rh, ra] = score.et ?? score.ft
+  let penaltyWinner = null
+  if (score.p) {
+    const [ph, pa] = score.p
+    const homeCode = TEAM_MAP[match.team1]
+    const awayCode = TEAM_MAP[match.team2]
+    penaltyWinner = ph > pa ? homeCode : awayCode
+  }
+  return { result_home: rh, result_away: ra, penaltyWinner }
 }
 
-// ── Traer partidos de Supabase ────────────────────────────────────────────────
-async function fetchSupabaseMatches() {
-  const { data, error } = await supabase
-    .from('matches')
-    .select('id, home_code, away_code, status, result_home, result_away')
-  if (error) throw error
-  return data
-}
-
-// ── Sync ──────────────────────────────────────────────────────────────────────
 async function sync() {
   console.log('🔄 Iniciando sincronización...')
-  console.log(`📡 Fuente: ${DATA_URL}`)
 
-  const [remoteMatches, supabaseMatches] = await Promise.all([
-    fetchRemoteMatches(),
-    fetchSupabaseMatches(),
+  const [remoteRes, { data: sbMatches }, { data: sbKnockout }] = await Promise.all([
+    fetch(DATA_URL).then(r => r.json()),
+    supabase.from('matches').select('id, home_code, away_code, status, result_home, result_away'),
+    supabase.from('knockout_matches').select('id, home_code, away_code, round, status, result_home, result_away, penalty_winner'),
   ])
 
-  // Construir lookup de supabase: { 'MEX-SUD': {id, ...}, 'SUD-MEX': {id, ...} }
+  // ── Grupos ────────────────────────────────────────────────────────────────
+  console.log('\n⚽ Fase de grupos:')
   const sbLookup = {}
-  for (const m of supabaseMatches) {
+  for (const m of sbMatches) {
     sbLookup[`${m.home_code}-${m.away_code}`] = m
     sbLookup[`${m.away_code}-${m.home_code}`] = { ...m, _reversed: true }
   }
 
-  let updated = 0
-  let skipped = 0
-  let notFound = 0
+  let gUpdated = 0, gSkipped = 0
+  for (const remote of remoteRes.matches.filter(m => m.group && m.score?.ft)) {
+    const hc = TEAM_MAP[remote.team1]
+    const ac = TEAM_MAP[remote.team2]
+    const sbMatch = sbLookup[`${hc}-${ac}`]
+    if (!sbMatch) continue
 
-  for (const remote of remoteMatches) {
-    const homeCode = TEAM_MAP[remote.team1]
-    const awayCode = TEAM_MAP[remote.team2]
+    let [sh, sa] = remote.score.ft
+    if (sbMatch._reversed) [sh, sa] = [sa, sh]
 
-    const key = `${homeCode}-${awayCode}`
-    const sbMatch = sbLookup[key]
-
-    if (!sbMatch) {
-      console.warn(`  ⚠️  No encontrado en Supabase: ${remote.team1} vs ${remote.team2} (${homeCode} vs ${awayCode})`)
-      notFound++
-      continue
+    if (sbMatch.status === 'finished' && sbMatch.result_home === sh && sbMatch.result_away === sa) {
+      gSkipped++; continue
     }
 
-    const hasScore = remote.score?.ft
-    if (!hasScore) {
-      skipped++
-      continue // partido no jugado todavía
-    }
+    const { error } = await supabase.from('matches')
+      .update({ result_home: sh, result_away: sa, status: 'finished' })
+      .eq('id', sbMatch.id)
 
-    let [scoreHome, scoreAway] = remote.score.ft
+    if (error) console.error(`  ❌ ${remote.team1} vs ${remote.team2}:`, error.message)
+    else { console.log(`  ✅ ${remote.team1} ${sh}-${sa} ${remote.team2}`); gUpdated++ }
+  }
+  console.log(`  Actualizados: ${gUpdated} | Sin cambios: ${gSkipped}`)
 
-    // Si el partido estaba invertido, invertimos el score
-    if (sbMatch._reversed) {
-      [scoreHome, scoreAway] = [scoreAway, scoreHome]
-    }
-
-    const matchId = sbMatch.id
-
-    // Si ya está actualizado con el mismo resultado, no hacemos nada
-    if (
-      sbMatch.status === 'finished' &&
-      sbMatch.result_home === scoreHome &&
-      sbMatch.result_away === scoreAway
-    ) {
-      skipped++
-      continue
-    }
-
-    const { error } = await supabase
-      .from('matches')
-      .update({
-        result_home: scoreHome,
-        result_away: scoreAway,
-        status: 'finished',
-      })
-      .eq('id', matchId)
-
-    if (error) {
-      console.error(`  ❌ Error actualizando match ${matchId}:`, error.message)
-    } else {
-      console.log(`  ✅ ${remote.team1} ${scoreHome}-${scoreAway} ${remote.team2}  (id=${matchId})`)
-      updated++
+  // ── Knockout ──────────────────────────────────────────────────────────────
+  console.log('\n🏆 Fase eliminatoria:')
+  const sbKoLookup = {}
+  for (const m of sbKnockout) {
+    if (m.home_code && m.away_code) {
+      sbKoLookup[`${m.home_code}-${m.away_code}`] = m
+      sbKoLookup[`${m.away_code}-${m.home_code}`] = { ...m, _reversed: true }
     }
   }
 
-  console.log(`\n📊 Resumen:`)
-  console.log(`   Actualizados:   ${updated}`)
-  console.log(`   Sin cambios:    ${skipped}`)
-  console.log(`   No encontrados: ${notFound}`)
+  let kUpdated = 0, kSkipped = 0, kNotFound = 0
+  for (const remote of remoteRes.matches.filter(m => !m.group && m.score?.ft)) {
+    const hc = TEAM_MAP[remote.team1]
+    const ac = TEAM_MAP[remote.team2]
+    if (!hc || !ac) { kNotFound++; continue }
+
+    const sbMatch = sbKoLookup[`${hc}-${ac}`]
+    if (!sbMatch) { kNotFound++; continue }
+
+    const parsed = parseScore(remote)
+    if (!parsed) { kSkipped++; continue }
+
+    let { result_home, result_away, penaltyWinner } = parsed
+    if (sbMatch._reversed) {
+      ;[result_home, result_away] = [result_away, result_home]
+      if (penaltyWinner) penaltyWinner = penaltyWinner === hc ? ac : hc
+    }
+
+    if (
+      sbMatch.status === 'finished' &&
+      sbMatch.result_home === result_home &&
+      sbMatch.result_away === result_away &&
+      sbMatch.penalty_winner === penaltyWinner
+    ) { kSkipped++; continue }
+
+    const pen = penaltyWinner ? ` (pen: ${penaltyWinner})` : ''
+    const { error } = await supabase.from('knockout_matches')
+      .update({ result_home, result_away, penalty_winner: penaltyWinner, status: 'finished' })
+      .eq('id', sbMatch.id)
+
+    if (error) console.error(`  ❌ ${remote.team1} vs ${remote.team2}:`, error.message)
+    else { console.log(`  ✅ ${remote.team1} ${result_home}-${result_away} ${remote.team2}${pen}`); kUpdated++ }
+  }
+  console.log(`  Actualizados: ${kUpdated} | Sin cambios: ${kSkipped} | No encontrados: ${kNotFound}`)
+
   console.log(`\n✅ Sync completo ${new Date().toLocaleString('es-AR')}`)
 }
 

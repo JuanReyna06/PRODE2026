@@ -1,7 +1,5 @@
 // api/sync.js
 // Vercel Serverless Function — POST /api/sync
-// El frontend lo llama cuando el usuario toca "Actualizar"
-
 import { createClient } from '@supabase/supabase-js'
 
 const DATA_URL = 'https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json'
@@ -22,8 +20,34 @@ const TEAM_MAP = {
   'Ghana': 'GHA', 'Panama': 'PAN',
 }
 
+const ROUND_MAP = {
+  'Round of 32': 'R16',
+  'Round of 16': 'QF',
+  'Quarter-final': 'SF',
+  'Semi-final': 'F',
+  'Final': 'F',
+}
+
+// Dado un partido de openfootball, devuelve result_home, result_away, penalty_winner
+function parseScore(match) {
+  const score = match.score
+  if (!score) return null
+
+  // Usamos et (extra time) si existe, sino ft (full time)
+  const [rh, ra] = score.et ?? score.ft
+
+  let penaltyWinner = null
+  if (score.p) {
+    const [ph, pa] = score.p
+    const homeCode = TEAM_MAP[match.team1]
+    const awayCode = TEAM_MAP[match.team2]
+    penaltyWinner = ph > pa ? homeCode : awayCode
+  }
+
+  return { result_home: rh, result_away: ra, penaltyWinner }
+}
+
 export default async function handler(req, res) {
-  // Solo POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
@@ -34,20 +58,19 @@ export default async function handler(req, res) {
   )
 
   try {
-    // 1. Traer JSON de openfootball
     const response = await fetch(DATA_URL)
     if (!response.ok) throw new Error(`openfootball error: ${response.status}`)
     const data = await response.json()
 
-    const remoteMatches = data.matches.filter(
-      m => m.group && TEAM_MAP[m.team1] && TEAM_MAP[m.team2] && m.score?.ft
-    )
+    let groupsUpdated = 0
+    let knockoutUpdated = 0
 
-    // 2. Traer partidos actuales de Supabase
-    const { data: sbMatches, error } = await supabase
+    // ── Grupos ────────────────────────────────────────────────────────────────
+    const groupMatches = data.matches.filter(m => m.group && m.score?.ft)
+
+    const { data: sbMatches } = await supabase
       .from('matches')
       .select('id, home_code, away_code, status, result_home, result_away')
-    if (error) throw error
 
     const sbLookup = {}
     for (const m of sbMatches) {
@@ -55,32 +78,72 @@ export default async function handler(req, res) {
       sbLookup[`${m.away_code}-${m.home_code}`] = { ...m, _reversed: true }
     }
 
-    // 3. Actualizar los que cambiaron
-    let updated = 0
-    for (const remote of remoteMatches) {
-      const homeCode = TEAM_MAP[remote.team1]
-      const awayCode = TEAM_MAP[remote.team2]
-      const sbMatch = sbLookup[`${homeCode}-${awayCode}`]
+    for (const remote of groupMatches) {
+      const hc = TEAM_MAP[remote.team1]
+      const ac = TEAM_MAP[remote.team2]
+      const sbMatch = sbLookup[`${hc}-${ac}`]
       if (!sbMatch) continue
 
-      let [scoreHome, scoreAway] = remote.score.ft
-      if (sbMatch._reversed) [scoreHome, scoreAway] = [scoreAway, scoreHome]
+      let [sh, sa] = remote.score.ft
+      if (sbMatch._reversed) [sh, sa] = [sa, sh]
+
+      if (sbMatch.status === 'finished' && sbMatch.result_home === sh && sbMatch.result_away === sa) continue
+
+      await supabase.from('matches')
+        .update({ result_home: sh, result_away: sa, status: 'finished' })
+        .eq('id', sbMatch.id)
+      groupsUpdated++
+    }
+
+    // ── Knockout ──────────────────────────────────────────────────────────────
+    const knockoutRemote = data.matches.filter(m => !m.group && m.score?.ft)
+
+    const { data: sbKnockout } = await supabase
+      .from('knockout_matches')
+      .select('id, home_code, away_code, round, status, result_home, result_away, penalty_winner')
+
+    const sbKoLookup = {}
+    for (const m of sbKnockout) {
+      if (m.home_code && m.away_code) {
+        sbKoLookup[`${m.home_code}-${m.away_code}`] = m
+        sbKoLookup[`${m.away_code}-${m.home_code}`] = { ...m, _reversed: true }
+      }
+    }
+
+    for (const remote of knockoutRemote) {
+      const hc = TEAM_MAP[remote.team1]
+      const ac = TEAM_MAP[remote.team2]
+      if (!hc || !ac) continue
+
+      const sbMatch = sbKoLookup[`${hc}-${ac}`]
+      if (!sbMatch) continue
+
+      const parsed = parseScore(remote)
+      if (!parsed) continue
+
+      let { result_home, result_away, penaltyWinner } = parsed
+      if (sbMatch._reversed) {
+        ;[result_home, result_away] = [result_away, result_home]
+        if (penaltyWinner) {
+          penaltyWinner = penaltyWinner === hc ? ac : hc
+        }
+      }
 
       if (
         sbMatch.status === 'finished' &&
-        sbMatch.result_home === scoreHome &&
-        sbMatch.result_away === scoreAway
+        sbMatch.result_home === result_home &&
+        sbMatch.result_away === result_away &&
+        sbMatch.penalty_winner === penaltyWinner
       ) continue
 
-      await supabase
-        .from('matches')
-        .update({ result_home: scoreHome, result_away: scoreAway, status: 'finished' })
+      await supabase.from('knockout_matches')
+        .update({ result_home, result_away, penalty_winner: penaltyWinner, status: 'finished' })
         .eq('id', sbMatch.id)
-
-      updated++
+      knockoutUpdated++
     }
 
-    return res.status(200).json({ ok: true, updated })
+    return res.status(200).json({ ok: true, groupsUpdated, knockoutUpdated })
+
   } catch (err) {
     console.error(err)
     return res.status(500).json({ error: err.message })

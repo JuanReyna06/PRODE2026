@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import type { LeaderboardEntry, Match, KnockoutMatch, KnockoutPrediction } from '@/types'
+import type { LeaderboardEntry, KnockoutLeaderboardEntry, Match, KnockoutMatch, KnockoutPrediction } from '@/types'
 
 export function useProdeData() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
+  const [knockoutLeaderboard, setKnockoutLeaderboard] = useState<KnockoutLeaderboardEntry[]>([])
   const [matches, setMatches] = useState<Match[]>([])
   const [knockoutMatches, setKnockoutMatches] = useState<KnockoutMatch[]>([])
   const [loading, setLoading] = useState(true)
@@ -13,10 +14,12 @@ export function useProdeData() {
   const fetchData = useCallback(async () => {
     const [
       { data: boardData },
+      { data: knockoutBoardData },
       { data: matchData },
       { data: knockoutData },
     ] = await Promise.all([
       supabase.from('leaderboard').select('*').order('total_points', { ascending: false }),
+      supabase.from('leaderboard_knockout').select('*').order('total_points', { ascending: false }),
       supabase
         .from('matches')
         .select(`
@@ -25,13 +28,11 @@ export function useProdeData() {
           away_team:teams!away_code(name, code)
         `)
         .order('id', { ascending: true }),
-      supabase
-        .from('knockout_matches')
-        .select('*')
-        .order('match_order', { ascending: true }),
+      supabase.from('knockout_matches').select('*').order('match_order', { ascending: true }),
     ])
 
     if (boardData) setLeaderboard(boardData)
+    if (knockoutBoardData) setKnockoutLeaderboard(knockoutBoardData)
 
     if (matchData) {
       const formatted: Match[] = (matchData as any[]).map((m) => ({
@@ -46,12 +47,14 @@ export function useProdeData() {
         status: m.status,
       }))
       setMatches(formatted)
-      const liveGroups = formatted.some((m) => m.status === 'live')
-      const liveKnockout = (knockoutData ?? []).some((m: any) => m.status === 'live')
-      setHasLive(liveGroups || liveKnockout)
     }
 
-    if (knockoutData) setKnockoutMatches(knockoutData as KnockoutMatch[])
+    if (knockoutData) {
+      setKnockoutMatches(knockoutData as KnockoutMatch[])
+      const liveKnockout = (knockoutData as KnockoutMatch[]).some((m) => m.status === 'live')
+      const liveGroups = (matchData as any[] ?? []).some((m) => m.status === 'live')
+      setHasLive(liveGroups || liveKnockout)
+    }
 
     setLastUpdate(new Date())
     setLoading(false)
@@ -63,10 +66,9 @@ export function useProdeData() {
     return () => clearInterval(interval)
   }, [fetchData, hasLive])
 
-  return { leaderboard, matches, knockoutMatches, loading, lastUpdate, hasLive, refetch: fetchData }
+  return { leaderboard, knockoutLeaderboard, matches, knockoutMatches, loading, lastUpdate, hasLive, refetch: fetchData }
 }
 
-// Hook para predicciones de grupos de un participante
 export function useParticipantPredictions(participantId: number | null) {
   const [predictions, setPredictions] = useState<
     Array<{ match_id: number; pred_home: number | null; pred_away: number | null; points: number | null }>
@@ -89,7 +91,6 @@ export function useParticipantPredictions(participantId: number | null) {
   return { predictions, loading }
 }
 
-// Hook para predicciones de eliminatorias de un participante
 export function useParticipantKnockoutPredictions(participantId: number | null) {
   const [predictions, setPredictions] = useState<KnockoutPrediction[]>([])
   const [loading, setLoading] = useState(false)
